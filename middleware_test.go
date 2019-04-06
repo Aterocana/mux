@@ -375,6 +375,65 @@ func TestCORSMethodMiddleware(t *testing.T) {
 		}
 	}
 }
+func TestCORSMethodMiddlewareWithOptions(t *testing.T) {
+
+	cases := []struct {
+		path                   string
+		response               string
+		method                 string
+		origin                 string
+		headers                []string
+		testURL                string
+		expectedAllowedMethods string
+		expectedAllowedOrigin  string
+		expectedAllowedHeaders string
+	}{
+		{"/g/{o}", "a", "POST", "https://www.gorillatoolkit.org", []string{"Content-Type", "X-CUSTOM"}, "/g/asdf", "POST,OPTIONS", "https://www.gorillatoolkit.org", "Content-Type,X-CUSTOM"},
+		{"/g/{o}", "b", "PUT", "https://github.io", []string{"Content-Type"}, "/g/bla", "PUT,OPTIONS", "https://github.io", "Content-Type"},
+		{"/g/{o}", "c", "GET", "*", []string{}, "/g/orilla", "GET,OPTIONS", "*", ""},
+		{"/g", "d", "POST", "*", []string{}, "/g", "POST,OPTIONS", "*", ""},
+	}
+
+	for _, tt := range cases {
+		router := NewRouter()
+		router.HandleFunc(tt.path, stringHandler(tt.response)).Methods(tt.method)
+		router.Use(CORSMethodMiddlewareWithOptions(router, tt.origin, tt.headers))
+
+		rr := httptest.NewRecorder()
+		req := newRequest(tt.method, tt.testURL)
+
+		router.ServeHTTP(rr, req)
+
+		if rr.Body.String() != tt.response {
+			t.Errorf("Expected body '%s', found '%s'", tt.response, rr.Body.String())
+		}
+
+		allowedMethods := rr.Header().Get("Access-Control-Allow-Methods")
+
+		if allowedMethods != tt.expectedAllowedMethods {
+			t.Errorf("Expected Access-Control-Allow-Methods '%s', found '%s'", tt.expectedAllowedMethods, allowedMethods)
+		}
+
+		allowedOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+		if allowedOrigin != tt.expectedAllowedOrigin {
+			t.Errorf("Expected Access-Control-Allow-Origin '%s', found '%s'", tt.expectedAllowedOrigin, allowedOrigin)
+		}
+
+		allowedHeader := rr.Header().Get("Access-Control-Allow-Headers")
+		if len(tt.expectedAllowedHeaders) == 0 {
+			if allowedHeader != "" {
+				t.Errorf("Expected Access-Control-Allow-Headers empty, found '%s'", allowedHeader)
+				return
+			}
+			return
+		}
+		if allowedHeader != tt.expectedAllowedHeaders {
+			t.Errorf("Expected Access-Control-Allow-Headers '%s', found '%s'", tt.expectedAllowedHeaders, allowedHeader)
+		}
+
+	}
+
+}
 
 func TestMiddlewareOnMultiSubrouter(t *testing.T) {
 	first := "first"
